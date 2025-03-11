@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,6 +18,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.koushikdutta.ion.Ion;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity {
 
     private final String API_KEY = "284b7c32ae55a7ae83fcff465117015b";
@@ -25,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText cityName;
     private ImageView iconWeather;
     private TextView temp, city;
+    private ListView lvDailyWeather;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
         iconWeather = findViewById(R.id.iconWeather);
         temp = findViewById(R.id.temp);
         city = findViewById(R.id.city);
+        lvDailyWeather = findViewById(R.id.lvDailyWeather);
 
         btnSearch.setOnClickListener(v -> {
             String cityValue = cityName.getText().toString().trim();
@@ -83,6 +89,14 @@ public class MainActivity extends AppCompatActivity {
                             JsonArray weather = result.get("weather").getAsJsonArray();
                             String icon = weather.get(0).getAsJsonObject().get("icon").getAsString();
                             loadIcon(icon);
+
+                            // Get Daily Forecast
+                            JsonObject coord = result.get("coord").getAsJsonObject();
+                            double lon = coord.get("lon").getAsDouble();
+                            double lat = coord.get("lat").getAsDouble();
+
+                            getDailyForecast(lon, lat);
+
                         } catch (Exception exception) {
                             Toast.makeText(getApplicationContext(), result.get("message").getAsString(), Toast.LENGTH_SHORT).show();
                         }
@@ -94,5 +108,34 @@ public class MainActivity extends AppCompatActivity {
         Ion.with(getApplicationContext())
                 .load("http://openweathermap.org/img/w/" + icon + ".png")
                 .intoImageView(iconWeather);
+    }
+
+    private void getDailyForecast(double lon, double lat) {
+        Ion.with(getApplicationContext())
+                .load("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&daily=temperature_2m_min&timezone=auto")
+                .asJsonObject()
+                .setCallback((e, result) -> {
+                    if (e != null) {
+                        e.printStackTrace();
+                        Toast.makeText(getApplicationContext(), "Server error", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // convert json to response java
+                        JsonObject daily = result.get("daily").getAsJsonObject();
+                        JsonArray dates = daily.get("time").getAsJsonArray();
+                        JsonArray temps = daily.get("temperature_2m_min").getAsJsonArray();
+
+                        List<Weather> weathers = new ArrayList<>();
+
+                        for (int i = 0; i < dates.size(); i++) {
+                            String date = dates.get(i).getAsString();
+                            double temp = temps.get(i).getAsDouble();
+                            weathers.add(new Weather(date, temp));
+                        }
+
+                        DailyWeatherAdapter adapter = new DailyWeatherAdapter(getApplicationContext(), weathers);
+
+                        lvDailyWeather.setAdapter(adapter);
+                    }
+                });
     }
 }
